@@ -1,8 +1,13 @@
 package com.github.stephenWanjala
 
+import com.github.stephenWanjala.kTodo.TodoTable
+import com.github.stephenWanjala.kTodo.TrainingTaskTable
+import com.github.stephenWanjala.kTodo.UserTable
 import io.ktor.server.application.*
 import com.github.stephenWanjala.plugins.*
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.transactions.transaction
 
 fun main(args: Array<String>): Unit =
     io.ktor.server.netty.EngineMain.main(args)
@@ -15,6 +20,9 @@ fun Application.module() {
         user = "postgres",
         password = ""
     )
+    transaction {
+        SchemaUtils.create(UserTable, TodoTable, TrainingTaskTable)
+    }
     configureSerialization()
     configureSecurity()
     configureMonitoring()

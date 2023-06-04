@@ -16,6 +16,8 @@ fun Application.configureRouting() {
         getTodo()
         updateTodo()
         deleteTodo()
+        registerUser()
+        loginUser()
 
     }
 }
