@@ -1,5 +1,7 @@
 package com.github.stephenWanjala.kTodo
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import com.github.stephenWanjala.kTodo.model.Todo
 import com.github.stephenWanjala.kTodo.model.TodoRequest
 import com.github.stephenWanjala.kTodo.model.UserRequest
@@ -10,10 +12,14 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.insertAndGetId
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.mindrot.jbcrypt.BCrypt
+import java.util.*
 
 fun Route.todos() {
     authenticate {
@@ -66,7 +72,7 @@ fun Route.createTodo() {
             call.respond(HttpStatusCode.BadRequest, "Invalid user")
         }
     }
-    }
+}
 
 
 fun Route.getTodo() {
@@ -138,8 +144,8 @@ fun Route.deleteTodo() {
 
 }
 
-fun Route.registerUser(){
-    post ("/register"){
+fun Route.registerUser() {
+    post("/register") {
         val userRequest = call.receive<UserRequest>()
         val existingUser = transaction {
             UserTable.select { UserTable.username eq userRequest.username }.singleOrNull()
@@ -159,14 +165,17 @@ fun Route.registerUser(){
     }
 }
 
-fun Route.loginUser(){
+fun Route.loginUser(config: TokenConfig) {
     post("/login") {
         val userRequest = call.receive<UserRequest>()
         val user = transaction {
             UserTable.select { UserTable.username eq userRequest.username }.singleOrNull()
         }
         if (user != null && verifyPassword(userRequest.password, user[UserTable.password])) {
-            val token = generateToken(user[UserTable.username])
+            val token = generateToken(
+                config = config,
+                TokenClaim(name = UserTable.username.name, value = user[UserTable.username])
+            )
             call.respond(mapOf("token" to token))
         } else {
             call.respond(HttpStatusCode.Unauthorized, "Invalid credentials")
@@ -174,9 +183,19 @@ fun Route.loginUser(){
     }
 }
 
-fun generateToken(username: String): String {
-    TODO("Not yet implemented")
-}
+fun generateToken(config: TokenConfig, vararg claims: TokenClaim): String =
+    JWT.create()
+        .withIssuer(config.issuer)
+        .withAudience(config.audience)
+        .withExpiresAt(Date(System.currentTimeMillis() + config.expiresIn))
+        .withJWTId(config.secret)
+        .apply {
+            claims.forEach { claim ->
+                withClaim(claim.name, claim.value)
+            }
+        }
+        .sign(Algorithm.HMAC256(config.secret))
+
 
 fun getUserIdByUsername(username: String): Int? {
     return transaction {
@@ -201,3 +220,15 @@ fun verifyPassword(password: String, hashedPassword: String): Boolean {
     return BCrypt.checkpw(password, hashedPassword)
 }
 
+data class TokenConfig(
+    val issuer: String,
+    val audience: String,
+    val expiresIn: Long,
+    val secret: String
+)
+
+
+data class TokenClaim(
+    val name: String,
+    val value: String
+)
